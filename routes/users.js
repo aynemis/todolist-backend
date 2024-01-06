@@ -10,9 +10,10 @@ const bcrypt = require("bcrypt");
 //CREATE NEW USER
 router.post("/signup", (req, res) => {
   const usernameLowerCase = req.body.username.toLowerCase();
-  console.log(usernameLowerCase)
+ 
   if (
     !checkBody(req.body, [
+      "firstname",
       "username",
       "password",
     ])
@@ -27,11 +28,12 @@ router.post("/signup", (req, res) => {
       if (existingUser) {
         return res.json({
           result: false,
-          error: "This username is already used",
+          error: "This username already exists",
         });
       }else {
         const hash = bcrypt.hashSync(req.body.password, 10);
         const newUser = new User({
+          firstname: req.body.firstname,
           username: usernameLowerCase,
           password: hash,
           token: uid2(32),
@@ -39,11 +41,29 @@ router.post("/signup", (req, res) => {
         });
         newUser.save().then(() => {
           User.findOne({username:usernameLowerCase})
-          .then(data => {res.json({user:data})})
+          .then(data => {res.json({result: true, user:data})})
         })
       }
     });
 });
+
+//SIGN IN
+router.post('/signin', (req, res) => {
+  const usernameLowerCase = req.body.username.toLowerCase();
+  if (!checkBody(req.body, ['username', 'password'])) {
+    res.json({ result: false, error: 'Missing or empty fields' });
+    return;
+  }
+
+  User.findOne({ username: usernameLowerCase }).then(data => {
+    if (data && bcrypt.compareSync(req.body.password, data.password)) {
+      res.json({ result: true, username: data.username , firstname : data.firstname});
+    } else {
+      res.json({ result: false, error: 'User not found or wrong password' });
+    }
+  });
+});
+
 
 //CREATE NEW TASK FOR A USER
 router.put('/newtask', (req, res) => {
@@ -86,5 +106,23 @@ router.delete('/deletetask/:id', (req, res) => {
       });
   });
 });
+
+//GET NORMAL TASKS
+router.get('/tasks/:username', (req,res) => {
+  User.findOne({username:req.params.username})
+  .then(data => {
+    const tasks = data.tasks.filter((task) => task.isUrgent === false)
+    res.json({tasks})
+  })
+})
+
+//GET URGENT TASKS
+router.get('/urgent/:username', (req,res) => {
+  User.findOne({username:req.params.username})
+  .then(data => {
+    const tasks = data.tasks.filter((task) => task.isUrgent === true)
+    res.json({tasks})
+  })
+})
 
 module.exports = router;
